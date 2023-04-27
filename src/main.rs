@@ -6,8 +6,9 @@ pub use bullet::*;
 pub use target::*;
 pub use tower::*;
 
-use bevy::{app::AppExit, prelude::*, window::WindowResolution};
+use bevy::{app::AppExit, pbr::NotShadowCaster, prelude::*, window::WindowResolution};
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
+use bevy_mod_picking::*;
 
 pub const WINDOW_HEIGHT: f32 = 720.0;
 pub const WINDOW_WIDTH: f32 = 1280.0;
@@ -28,6 +29,7 @@ fn main() {
             ..default()
         }))
         // Plugins
+        .add_plugins(DefaultPickingPlugins)
         .add_plugin(WorldInspectorPlugin::new().run_if(in_state(InspectorState::On)))
         .add_plugin(TowerPlugin)
         .add_plugin(TargetPlugin)
@@ -35,8 +37,9 @@ fn main() {
         // Startup Systems
         .add_startup_system(spawn_camera)
         .add_startup_system(spawn_basic_scene)
-        .add_startup_system(asset_loading)
+        .add_startup_system(asset_loading.in_base_set(StartupSet::PreStartup))
         // Systems
+        .add_system(camera_controls)
         .add_system(toggle_inspector_egui)
         .add_system(exit_game)
         .run();
@@ -55,7 +58,10 @@ pub enum InspectorState {
 
 #[derive(Resource)]
 pub struct GameAssets {
-    bullet_scene: Handle<Scene>,
+    tower_base_scene: Handle<Scene>,
+    tomato_tower_scene: Handle<Scene>,
+    tomato_scene: Handle<Scene>,
+    target_scene: Handle<Scene>,
 }
 
 // === Game-level systems ===
@@ -84,19 +90,64 @@ pub fn toggle_inspector_egui(
 
 pub fn asset_loading(mut commands: Commands, assets: Res<AssetServer>) {
     commands.insert_resource(GameAssets {
-        bullet_scene: assets.load("Bullet.glb#Scene0"),
+        tower_base_scene: assets.load("TowerBase.glb#Scene0"),
+        tomato_tower_scene: assets.load("TomatoTower.glb#Scene0"),
+        tomato_scene: assets.load("Tomato.glb#Scene0"),
+        target_scene: assets.load("Target.glb#Scene0"),
     });
 }
 
 pub fn spawn_camera(mut commands: Commands) {
-    commands.spawn(Camera3dBundle {
-        transform: Transform::from_xyz(-2.0, 2.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
-        ..default()
-    });
+    commands.spawn((
+        Camera3dBundle {
+            transform: Transform::from_xyz(-2.0, 2.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
+            ..default()
+        },
+        PickingCameraBundle::default(),
+    ));
+}
+
+pub fn camera_controls(
+    keyboard_input: Res<Input<KeyCode>>,
+    mut camera_query: Query<&mut Transform, With<Camera3d>>,
+    time: Res<Time>,
+) {
+    let mut camera = camera_query.single_mut();
+
+    let mut forward = camera.forward();
+    forward.y = 0.0;
+    forward = forward.normalize();
+
+    let mut left = camera.left();
+    left.y = 0.0;
+    left = left.normalize();
+
+    let speed: f32 = 3.0;
+    let rotate_speed: f32 = 0.3;
+
+    if keyboard_input.pressed(KeyCode::W) {
+        camera.translation += forward * time.delta_seconds() * speed;
+    }
+    if keyboard_input.pressed(KeyCode::S) {
+        camera.translation -= forward * time.delta_seconds() * speed;
+    }
+    if keyboard_input.pressed(KeyCode::A) {
+        camera.translation += left * time.delta_seconds() * speed;
+    }
+    if keyboard_input.pressed(KeyCode::D) {
+        camera.translation -= left * time.delta_seconds() * speed;
+    }
+    if keyboard_input.pressed(KeyCode::Q) {
+        camera.rotate_axis(Vec3::Y, rotate_speed * time.delta_seconds())
+    }
+    if keyboard_input.pressed(KeyCode::E) {
+        camera.rotate_axis(Vec3::Y, -rotate_speed * time.delta_seconds())
+    }
 }
 
 pub fn spawn_basic_scene(
     mut commands: Commands,
+    game_assets: Res<GameAssets>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
@@ -104,7 +155,7 @@ pub fn spawn_basic_scene(
     commands.spawn((
         PbrBundle {
             mesh: meshes.add(Mesh::from(shape::Plane {
-                size: 5.0,
+                size: 10.0,
                 subdivisions: 0,
             })),
             material: materials.add(Color::rgb(0.3, 0.5, 0.3).into()),
@@ -113,11 +164,38 @@ pub fn spawn_basic_scene(
         Name::new("Ground"),
     ));
     // Adding tower
+    let default_collider_color = materials.add(Color::rgba(0.3, 0.5, 0.3, 0.3).into());
+    let selected_collider_color = materials.add(Color::rgba(0.3, 0.9, 0.3, 0.9).into());
+    commands
+        .spawn((
+            SpatialBundle {
+                transform: Transform::from_xyz(0.0, 0.0, 0.0),
+                ..default()
+            },
+            // Mesh
+            meshes.add(shape::Capsule::default().into()),
+            // Material
+            default_collider_color.clone(),
+            // Highlighting settings
+            Highlighting {
+                initial: default_collider_color,
+                hovered: Some(selected_collider_color.clone()),
+                pressed: Some(selected_collider_color.clone()),
+                selected: Some(selected_collider_color),
+            },
+            NotShadowCaster,
+            PickableBundle::default(),
+        ))
+        .with_children(|commands| {
+            commands.spawn(SceneBundle {
+                scene: game_assets.tower_base_scene.clone(),
+                transform: Transform::from_xyz(0.0, -0.8, 0.0),
+                ..default()
+            });
+        });
     commands.spawn((
-        PbrBundle {
-            mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
-            material: materials.add(Color::rgb(0.6, 0.8, 0.9).into()),
-            transform: Transform::from_xyz(0.0, 0.5, 0.0),
+        SceneBundle {
+            scene: game_assets.tower_base_scene.clone(),
             ..default()
         },
         Tower {

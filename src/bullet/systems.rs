@@ -1,7 +1,7 @@
 use crate::*;
 use bevy::prelude::*;
 
-pub fn bullet_despawn(
+pub(super) fn bullet_despawn(
     mut commands: Commands,
     mut bullets: Query<(Entity, &mut Lifetime)>,
     time: Res<Time>,
@@ -14,13 +14,13 @@ pub fn bullet_despawn(
     }
 }
 
-pub fn move_bullets(mut bullets: Query<(&Bullet, &mut Transform)>, time: Res<Time>) {
+pub(super) fn move_bullets(mut bullets: Query<(&Bullet, &mut Transform)>, time: Res<Time>) {
     for (bullet, mut transform) in &mut bullets {
         transform.translation += bullet.direction.normalize() * bullet.speed * time.delta_seconds();
     }
 }
 
-pub fn bullet_collision(
+pub(super) fn bullet_collision(
     mut commands: Commands,
     bullets: Query<(Entity, &GlobalTransform), With<Bullet>>,
     mut targets: Query<(&mut Health, &Transform), With<Target>>,

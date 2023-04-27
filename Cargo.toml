@@ -12,3 +12,4 @@ opt-level = 3
 [dependencies]
 bevy = "0.10.0"
 bevy-inspector-egui = "0.18.3"
+bevy_mod_picking = "0.12.0"
