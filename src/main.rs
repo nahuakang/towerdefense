@@ -1,6 +1,4 @@
-use std::f32::consts::PI;
-
-use bevy::{app::AppExit, prelude::*, window::WindowResolution};
+use bevy::{app::AppExit, prelude::*, utils::FloatOrd, window::WindowResolution};
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 
 pub const WINDOW_HEIGHT: f32 = 720.0;
@@ -10,7 +8,9 @@ fn main() {
     App::new()
         .insert_resource(ClearColor(Color::rgb(0.2, 0.2, 0.2)))
         .register_type::<Tower>()
+        .register_type::<Target>()
         .register_type::<Lifetime>()
+        .register_type::<Health>()
         .add_state::<InspectorState>()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
@@ -28,9 +28,15 @@ fn main() {
         .add_system(toggle_inspector_egui)
         .add_system(exit_game)
         .add_system(tower_shooting)
+        .add_system(move_targets)
+        .add_system(target_death)
+        .add_system(move_bullets)
+        .add_system(bullet_collision)
         .add_system(bullet_despawn)
         .run();
 }
+
+// === STATES ===
 
 #[derive(States, Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]
 pub enum InspectorState {
@@ -38,6 +44,8 @@ pub enum InspectorState {
     On,
     Off,
 }
+
+// === COMPONENTS ===
 
 #[derive(Resource)]
 pub struct GameAssets {
@@ -48,6 +56,19 @@ pub struct GameAssets {
 #[reflect(Component)]
 pub struct Tower {
     shooting_timer: Timer,
+    bullet_offset: Vec3,
+}
+
+#[derive(Component, Default, Reflect)]
+#[reflect(Component)]
+pub struct Target {
+    speed: f32,
+}
+
+#[derive(Component, Default, Reflect)]
+#[reflect(Component)]
+pub struct Health {
+    value: i32,
 }
 
 #[derive(Component, Default, Reflect)]
@@ -55,6 +76,15 @@ pub struct Tower {
 pub struct Lifetime {
     timer: Timer,
 }
+
+#[derive(Component, Default, Reflect)]
+#[reflect(Component)]
+pub struct Bullet {
+    direction: Vec3,
+    speed: f32,
+}
+
+// === SYSTEMS ===
 
 pub fn exit_game(
     keyboard_input: Res<Input<KeyCode>>,
@@ -96,6 +126,7 @@ pub fn spawn_basic_scene(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
+    // Adding ground plane
     commands.spawn((
         PbrBundle {
             mesh: meshes.add(Mesh::from(shape::Plane {
@@ -107,6 +138,7 @@ pub fn spawn_basic_scene(
         },
         Name::new("Ground"),
     ));
+    // Adding tower
     commands.spawn((
         PbrBundle {
             mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
@@ -116,9 +148,34 @@ pub fn spawn_basic_scene(
         },
         Tower {
             shooting_timer: Timer::from_seconds(1.0, TimerMode::Repeating),
+            bullet_offset: Vec3::new(0.0, 0.2, 0.5),
         },
         Name::new("Tower"),
     ));
+    // Adding targets
+    commands.spawn((
+        PbrBundle {
+            mesh: meshes.add(Mesh::from(shape::Cube { size: 0.4 })),
+            material: materials.add(Color::rgb(0.67, 0.84, 0.92).into()),
+            transform: Transform::from_xyz(-2.0, 0.2, 1.5),
+            ..default()
+        },
+        Target { speed: 0.3 },
+        Health { value: 3 },
+        Name::new("Target"),
+    ));
+    commands.spawn((
+        PbrBundle {
+            mesh: meshes.add(Mesh::from(shape::Cube { size: 0.4 })),
+            material: materials.add(Color::rgb(0.67, 0.84, 0.92).into()),
+            transform: Transform::from_xyz(-4.0, 0.2, 1.5),
+            ..default()
+        },
+        Target { speed: 0.3 },
+        Health { value: 3 },
+        Name::new("Target"),
+    ));
+    // Adding lighting
     commands.spawn((
         PointLightBundle {
             point_light: PointLight {
@@ -135,28 +192,41 @@ pub fn spawn_basic_scene(
 
 pub fn tower_shooting(
     mut commands: Commands,
-    mut towers: Query<&mut Tower>,
+    mut towers: Query<(Entity, &mut Tower, &GlobalTransform)>,
+    targets: Query<&GlobalTransform, With<Target>>,
     bullet_assets: Res<GameAssets>,
     time: Res<Time>,
 ) {
-    if let Ok(mut tower) = towers.get_single_mut() {
+    for (tower_entity, mut tower, transform) in &mut towers {
         tower.shooting_timer.tick(time.delta());
         if tower.shooting_timer.just_finished() {
-            // Shoot the bullet
-            let spawn_transform =
-                Transform::from_xyz(0.0, 0.7, 0.6).with_rotation(Quat::from_rotation_y(-PI / 2.0));
+            let bullet_spawn = transform.translation() + tower.bullet_offset;
+            let direction = targets
+                .iter()
+                .min_by_key(|target_transform| {
+                    FloatOrd(Vec3::distance(target_transform.translation(), bullet_spawn))
+                })
+                .map(|closest_target| closest_target.translation() - bullet_spawn);
 
-            commands.spawn((
-                SceneBundle {
-                    scene: bullet_assets.bullet_scene.clone(),
-                    transform: spawn_transform,
-                    ..default()
-                },
-                Lifetime {
-                    timer: Timer::from_seconds(0.5, TimerMode::Once),
-                },
-                Name::new("Bullet"),
-            ));
+            if let Some(direction) = direction {
+                commands.entity(tower_entity).with_children(|commands| {
+                    commands.spawn((
+                        SceneBundle {
+                            scene: bullet_assets.bullet_scene.clone(),
+                            transform: Transform::from_translation(tower.bullet_offset),
+                            ..default()
+                        },
+                        Bullet {
+                            direction,
+                            speed: 2.5,
+                        },
+                        Lifetime {
+                            timer: Timer::from_seconds(0.5, TimerMode::Once),
+                        },
+                        Name::new("Bullet"),
+                    ));
+                });
+            }
         }
     }
 }
@@ -170,6 +240,42 @@ pub fn bullet_despawn(
         lifetime.timer.tick(time.delta());
         if lifetime.timer.just_finished() {
             commands.entity(entity).despawn_recursive();
+        }
+    }
+}
+
+pub fn move_targets(mut targets: Query<(&Target, &mut Transform)>, time: Res<Time>) {
+    for (target, mut transform) in &mut targets {
+        transform.translation.x += target.speed * time.delta_seconds();
+    }
+}
+
+pub fn move_bullets(mut bullets: Query<(&Bullet, &mut Transform)>, time: Res<Time>) {
+    for (bullet, mut transform) in &mut bullets {
+        transform.translation += bullet.direction.normalize() * bullet.speed * time.delta_seconds();
+    }
+}
+
+pub fn target_death(mut commands: Commands, targets: Query<(Entity, &Health)>) {
+    for (entity, health) in &targets {
+        if health.value <= 0 {
+            commands.entity(entity).despawn_recursive();
+        }
+    }
+}
+
+pub fn bullet_collision(
+    mut commands: Commands,
+    bullets: Query<(Entity, &GlobalTransform), With<Bullet>>,
+    mut targets: Query<(&mut Health, &Transform), With<Target>>,
+) {
+    for (bullet_entity, bullet_transform) in &bullets {
+        for (mut health, target_transform) in &mut targets {
+            if Vec3::distance(bullet_transform.translation(), target_transform.translation) < 0.5 {
+                commands.entity(bullet_entity).despawn_recursive();
+                health.value -= 1;
+                break;
+            }
         }
     }
 }
