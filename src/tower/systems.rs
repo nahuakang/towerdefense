@@ -22,7 +22,7 @@ pub(super) fn spawn_tower(
         .with_children(|commands| {
             commands.spawn(SceneBundle {
                 scene: tower_scene,
-                transform: Transform::from_xyz(0.0, 0.0, 0.0),
+                transform: Transform::from_xyz(0.0, -0.8, 0.0),
                 ..default()
             });
         })
@@ -48,6 +48,9 @@ pub(super) fn tower_shooting(
             let bullet_spawn = transform.translation() + tower.bullet_offset;
             let direction = targets
                 .iter()
+                .filter(|target_transform| {
+                    Vec3::distance(target_transform.translation(), bullet_spawn) < tower.range
+                })
                 .min_by_key(|target_transform| {
                     FloatOrd(Vec3::distance(target_transform.translation(), bullet_spawn))
                 })
@@ -65,7 +68,7 @@ pub(super) fn tower_shooting(
                         },
                         bullet,
                         Lifetime {
-                            timer: Timer::from_seconds(0.5, TimerMode::Once),
+                            timer: Timer::from_seconds(10.0, TimerMode::Once),
                         },
                         Name::new("Bullet"),
                     ));

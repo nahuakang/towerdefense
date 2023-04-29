@@ -10,6 +10,6 @@ opt-level = 1
 opt-level = 3
 
 [dependencies]
-bevy = "0.10.0"
+bevy = {version = "0.10.0", features = ["wav"]}
 bevy-inspector-egui = "0.18.3"
 bevy_mod_picking = "0.12.0"

@@ -171,97 +171,77 @@ pub fn camera_controls(
 
 pub fn spawn_basic_scene(
     mut commands: Commands,
-    game_assets: Res<GameAssets>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    game_assets: Res<GameAssets>,
 ) {
-    // Adding ground plane
-    commands.spawn((
-        PbrBundle {
+    commands
+        .spawn(PbrBundle {
             mesh: meshes.add(Mesh::from(shape::Plane {
-                size: 10.0,
+                size: 50.0,
                 subdivisions: 0,
             })),
             material: materials.add(Color::rgb(0.3, 0.5, 0.3).into()),
             ..default()
-        },
-        Name::new("Ground"),
-    ));
-    // Adding tower
+        })
+        .insert(Name::new("Ground"));
+
     let default_collider_color = materials.add(Color::rgba(0.3, 0.5, 0.3, 0.3).into());
     let selected_collider_color = materials.add(Color::rgba(0.3, 0.9, 0.3, 0.9).into());
+
+    for i in 0..10 {
+        for j in 0..2 {
+            commands
+                .spawn(SpatialBundle::from_transform(Transform::from_xyz(
+                    2.0 * i as f32 + j as f32,
+                    0.8,
+                    5.0 * j as f32,
+                )))
+                .insert(Name::new("Tower_Base"))
+                .insert(meshes.add(shape::Capsule::default().into()))
+                .insert(Highlighting {
+                    initial: default_collider_color.clone(),
+                    hovered: Some(selected_collider_color.clone()),
+                    pressed: Some(selected_collider_color.clone()),
+                    selected: Some(selected_collider_color.clone()),
+                })
+                .insert(default_collider_color.clone())
+                .insert(NotShadowCaster)
+                .insert(PickableBundle::default())
+                .with_children(|commands| {
+                    commands.spawn(SceneBundle {
+                        scene: game_assets.tower_base_scene.clone(),
+                        transform: Transform::from_xyz(0.0, -0.8, 0.0),
+                        ..Default::default()
+                    });
+                });
+        }
+    }
+
+    for i in 1..25 {
+        commands
+            .spawn(SceneBundle {
+                scene: game_assets.target_scene.clone(),
+                transform: Transform::from_xyz(-2.0 * i as f32, 0.4, 2.5),
+                ..Default::default()
+            })
+            .insert(Target {
+                speed: 0.45,
+                ..Default::default()
+            })
+            .insert(Health { value: 3 })
+            .insert(Name::new("Target"));
+    }
+
     commands
-        .spawn((
-            SpatialBundle {
-                transform: Transform::from_xyz(0.0, 0.0, 0.0),
-                ..default()
-            },
-            // Mesh
-            meshes.add(shape::Capsule::default().into()),
-            // Material
-            default_collider_color.clone(),
-            // Highlighting settings
-            Highlighting {
-                initial: default_collider_color,
-                hovered: Some(selected_collider_color.clone()),
-                pressed: Some(selected_collider_color.clone()),
-                selected: Some(selected_collider_color),
-            },
-            NotShadowCaster,
-            PickableBundle::default(),
-        ))
-        .with_children(|commands| {
-            commands.spawn(SceneBundle {
-                scene: game_assets.tower_base_scene.clone(),
-                transform: Transform::from_xyz(0.0, -0.8, 0.0),
-                ..default()
-            });
-        });
-    commands.spawn((
-        SceneBundle {
-            scene: game_assets.tower_base_scene.clone(),
-            ..default()
-        },
-        Tower {
-            shooting_timer: Timer::from_seconds(1.0, TimerMode::Repeating),
-            bullet_offset: Vec3::new(0.0, 0.2, 0.5),
-        },
-        Name::new("Tower"),
-    ));
-    // Adding targets
-    commands.spawn((
-        PbrBundle {
-            mesh: meshes.add(Mesh::from(shape::Cube { size: 0.4 })),
-            material: materials.add(Color::rgb(0.67, 0.84, 0.92).into()),
-            transform: Transform::from_xyz(-2.0, 0.2, 1.5),
-            ..default()
-        },
-        Target { speed: 0.3 },
-        Health { value: 3 },
-        Name::new("Target"),
-    ));
-    commands.spawn((
-        PbrBundle {
-            mesh: meshes.add(Mesh::from(shape::Cube { size: 0.4 })),
-            material: materials.add(Color::rgb(0.67, 0.84, 0.92).into()),
-            transform: Transform::from_xyz(-4.0, 0.2, 1.5),
-            ..default()
-        },
-        Target { speed: 0.3 },
-        Health { value: 3 },
-        Name::new("Target"),
-    ));
-    // Adding lighting
-    commands.spawn((
-        PointLightBundle {
+        .spawn(PointLightBundle {
             point_light: PointLight {
-                intensity: 1000.0,
+                intensity: 1500.0,
                 shadows_enabled: true,
                 ..default()
             },
             transform: Transform::from_xyz(4.0, 8.0, 4.0),
             ..default()
-        },
-        Name::new("Light"),
-    ));
+        })
+        .insert(Name::new("Light"));
 }

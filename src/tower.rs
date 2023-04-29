@@ -15,8 +15,14 @@ pub struct TowerPlugin;
 impl Plugin for TowerPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<Tower>()
+            .register_type::<TowerButtonState>()
             .add_systems(
-                (tower_shooting, tower_button_clicked, create_ui_on_selection)
+                (
+                    tower_shooting,
+                    tower_button_clicked,
+                    create_ui_on_selection,
+                    grey_tower_buttons.after(create_ui_on_selection),
+                )
                     .in_set(OnUpdate(GameState::Gameplay)),
             )
             .add_system(despawn_towers.in_schedule(OnExit(GameState::Gameplay)));

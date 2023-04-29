@@ -4,20 +4,44 @@ use crate::*;
 
 use super::systems::spawn_tower;
 
+pub(super) fn grey_tower_buttons(
+    mut buttons: Query<(&mut BackgroundColor, &mut TowerButtonState)>,
+    player: Query<&Player>,
+) {
+    let player = player.single();
+
+    for (mut tint, mut state) in &mut buttons {
+        if player.money >= state.cost {
+            state.affordable = true;
+            *tint = Color::WHITE.into();
+        } else {
+            state.affordable = false;
+            *tint = Color::DARK_GRAY.into();
+        }
+    }
+}
+
 pub(super) fn tower_button_clicked(
-    interactions: Query<(&Interaction, &TowerType), Changed<Interaction>>,
+    interactions: Query<(&Interaction, &TowerType, &TowerButtonState), Changed<Interaction>>,
     mut commands: Commands,
     selection: Query<(Entity, &Selection, &Transform)>,
+    mut player: Query<&mut Player>,
     assets: Res<GameAssets>,
 ) {
-    for (interaction, tower_type) in &interactions {
+    let mut player = player.single_mut();
+
+    for (interaction, tower_type, button_state) in &interactions {
         if matches!(interaction, Interaction::Clicked) {
             for (entity, selection, transform) in &selection {
                 if selection.selected() {
-                    commands.entity(entity).despawn_recursive();
-                }
+                    if player.money >= button_state.cost {
+                        player.money -= button_state.cost;
+                        commands.entity(entity).despawn_recursive();
+                    }
 
-                spawn_tower(&mut commands, &assets, transform.translation, *tower_type);
+                    commands.entity(entity).despawn_recursive();
+                    spawn_tower(&mut commands, &assets, transform.translation, *tower_type);
+                }
             }
         }
     }
@@ -31,6 +55,7 @@ pub(super) fn create_ui(commands: &mut Commands, asset_server: &AssetServer) {
     ];
 
     let towers = [TowerType::Tomato, TowerType::Potato, TowerType::Cabbage];
+    let costs = [50, 80, 110];
 
     commands
         .spawn((
@@ -56,6 +81,10 @@ pub(super) fn create_ui(commands: &mut Commands, asset_server: &AssetServer) {
                         },
                         image: button_icons[i].clone().into(),
                         ..default()
+                    },
+                    TowerButtonState {
+                        cost: costs[i],
+                        affordable: false,
                     },
                     towers[i],
                 ));

@@ -7,10 +7,18 @@ use crate::*;
 pub struct Tower {
     pub shooting_timer: Timer,
     pub bullet_offset: Vec3,
+    pub range: f32,
 }
 
 #[derive(Component)]
 pub struct TowerUIRoot;
+
+#[derive(Component, Default, Reflect)]
+#[reflect(Component)]
+pub struct TowerButtonState {
+    pub cost: u32,
+    pub affordable: bool,
+}
 
 // Migration guide from`Inspectable` to `Reflect`: https://shorturl.at/gjq09
 #[derive(Component, Clone, Copy, Debug, Default, Reflect)]
@@ -30,6 +38,7 @@ impl TowerType {
                 Tower {
                     shooting_timer: Timer::from_seconds(0.5, TimerMode::Repeating),
                     bullet_offset: Vec3::new(0.0, 0.6, 0.0),
+                    range: 6.5,
                 },
             ),
             TowerType::Potato => (
@@ -37,6 +46,7 @@ impl TowerType {
                 Tower {
                     shooting_timer: Timer::from_seconds(0.5, TimerMode::Repeating),
                     bullet_offset: Vec3::new(0.0, 0.6, 0.0),
+                    range: 6.5,
                 },
             ),
             TowerType::Cabbage => (
@@ -44,6 +54,7 @@ impl TowerType {
                 Tower {
                     shooting_timer: Timer::from_seconds(0.5, TimerMode::Repeating),
                     bullet_offset: Vec3::new(0.0, 0.6, 0.0),
+                    range: 6.5,
                 },
             ),
         }
