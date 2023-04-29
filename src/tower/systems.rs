@@ -29,6 +29,12 @@ pub(super) fn spawn_tower(
         .id()
 }
 
+pub(super) fn despawn_towers(mut commands: Commands, towers: Query<Entity, With<Tower>>) {
+    for tower_entity in towers.iter() {
+        commands.entity(tower_entity).despawn_recursive();
+    }
+}
+
 pub(super) fn tower_shooting(
     mut commands: Commands,
     mut towers: Query<(Entity, &mut Tower, &TowerType, &GlobalTransform)>,

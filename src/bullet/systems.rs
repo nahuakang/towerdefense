@@ -14,6 +14,12 @@ pub(super) fn bullet_despawn(
     }
 }
 
+pub(super) fn despawn_bullets(mut commands: Commands, bullets: Query<Entity, With<Bullet>>) {
+    for bullet_entity in bullets.iter() {
+        commands.entity(bullet_entity).despawn_recursive();
+    }
+}
+
 pub(super) fn move_bullets(mut bullets: Query<(&Bullet, &mut Transform)>, time: Res<Time>) {
     for (bullet, mut transform) in &mut bullets {
         transform.translation += bullet.direction.normalize() * bullet.speed * time.delta_seconds();

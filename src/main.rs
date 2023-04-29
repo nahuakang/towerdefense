@@ -1,8 +1,12 @@
 mod bullet;
+mod main_menu;
+mod player;
 mod target;
 mod tower;
 
 pub use bullet::*;
+pub use main_menu::*;
+pub use player::*;
 pub use target::*;
 pub use tower::*;
 
@@ -17,6 +21,8 @@ fn main() {
     App::new()
         // Toggle Egui Inspector State
         .add_state::<InspectorState>()
+        // Game State
+        .add_state::<GameState>()
         // Window Setup
         .insert_resource(ClearColor(Color::rgb(0.2, 0.2, 0.2)))
         .add_plugins(DefaultPlugins.set(WindowPlugin {
@@ -30,19 +36,29 @@ fn main() {
         }))
         // Plugins
         .add_plugins(DefaultPickingPlugins)
+        .add_plugin(PlayerPlugin)
         .add_plugin(WorldInspectorPlugin::new().run_if(in_state(InspectorState::On)))
+        .add_plugin(MainMenuPlugin)
         .add_plugin(TowerPlugin)
         .add_plugin(TargetPlugin)
         .add_plugin(BulletPlugin)
         // Startup Systems
         .add_startup_system(spawn_camera)
-        .add_startup_system(spawn_basic_scene)
         .add_startup_system(asset_loading.in_base_set(StartupSet::PreStartup))
         // Systems
+        .add_system(spawn_basic_scene.in_schedule(OnEnter(GameState::Gameplay)))
         .add_system(camera_controls)
         .add_system(toggle_inspector_egui)
         .add_system(exit_game)
         .run();
+}
+
+// === Game Sate ===
+#[derive(States, Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]
+pub enum GameState {
+    #[default]
+    MainMenu,
+    Gameplay,
 }
 
 // === Game-level states ===
